@@ -3,7 +3,7 @@
   "info": {
     "title": "HR ERP MVP API",
     "version": "1.0.0",
-    "description": "HR ERP 사이트 전체 API 계약 (single-company). 페이지: /login, /dashboard, /attendance, /leaves, /admin, 공통 플로팅 챗봇. 인증: 프론트 Supabase Auth SDK. Authorize에는 Supabase access token. 역할: employees.role = employee | hr_admin. hr_admin만 관리자 API. DB: employees, attendance_records, leave_balances, company_settings, leave_types, approval_rules, leave_requests, leave_balance_transactions. employees.id = auth.users.id FK. employee_id는 employees.id. 연차 계산(hr-assistant.md): remaining = leave_balances.total_days - used_days; pending_days = 해당 연도 pending leave_requests.total_days 합; available_days = remaining - pending_days. pending은 used_days/원장을 바꾸지 않음. approved 시 차감. 근태: 출근/퇴근은 클라이언트 시각 조작 방지를 위해 RPC(또는 DB 함수)로 서버 시각 기록·지각 판정 권장. 퇴근 check_out도 RPC로 처리하는 방향. 승인 시 reviewed_by는 처리한 hr_admin의 auth.uid()로 기록(RPC/trigger). company_settings는 싱글톤(id=true). 기본 행은 migration seed. 제외: SaaS 멀티테넌트, 제출 후 취소, 연차 자동 발생/이월/소멸, 급여, HR 실시간 채팅. 이 파일은 설계 명세이며 servers URL은 실제 백엔드로 교체."
+    "description": "HR ERP MVP API 계약 (single-company). 스키마는 public 마이그레이션 테이블 컬럼을 기준으로 한다. 역할: employees.role = employee | hr_admin. 근태: work_date·check_in·check_out은 백엔드 RPC가 서버 시각으로 기록·지각(status) 판정. 연차 응답 계산(백엔드): remaining_days = leave_balances.total_days - used_days; pending_days = 해당 연도 pending leave_requests.total_days 합; available_days = remaining_days - pending_days. 승인/반려 시 reviewed_by = 처리한 hr_admin의 auth.uid() (RPC/trigger). company_settings 싱글톤 id=true. 인증: Supabase access token."
   },
   "servers": [
     {
@@ -1058,8 +1058,7 @@
                         "full_name": "김직원",
                         "email": "employee@example.com",
                         "role": "employee",
-                        "department": "개발팀",
-                        "is_active": true
+                        "department": "개발팀"
                       }
                     }
                   }
@@ -1175,15 +1174,6 @@
                     "value": {
                       "data": {
                         "today": "2026-11-10",
-                        "timezone": "Asia/Seoul",
-                        "profile": {
-                          "id": "11111111-1111-4111-8111-111111111111",
-                          "full_name": "김직원",
-                          "email": "employee@example.com",
-                          "role": "employee",
-                          "department": "개발팀",
-                          "is_active": true
-                        },
                         "attendance": {
                           "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
                           "employee_id": "11111111-1111-4111-8111-111111111111",
@@ -1218,7 +1208,14 @@
                             "created_at": "2026-11-10T00:00:00Z",
                             "updated_at": "2026-11-10T00:00:00Z"
                           }
-                        ]
+                        ],
+                        "employee": {
+                          "id": "11111111-1111-4111-8111-111111111111",
+                          "full_name": "김직원",
+                          "email": "employee@example.com",
+                          "role": "employee",
+                          "department": "개발팀"
+                        }
                       }
                     }
                   }
@@ -1316,11 +1313,11 @@
     "/api/attendance/check-in": {
       "post": {
         "operationId": "post_api_attendance_check_in",
-        "summary": "출근 (서버 시각·지각 판정)",
+        "summary": "출근 (백엔드가 work_date·check_in·status 기록)",
         "tags": [
           "근태"
         ],
-        "description": "출근 RPC/서버 함수 호출. work_date·check_in은 서버 시각으로 기록하고 company_settings 기준으로 present|late 판정. 클라이언트가 시각을 보내지 않음.",
+        "description": "백엔드 RPC. 클라이언트가 work_date/check_in을 보내지 않음. 서버 시각으로 work_date·check_in 기록, company_settings로 present|late 판정.",
         "responses": {
           "201": {
             "description": "성공",
@@ -1478,11 +1475,11 @@
     "/api/attendance/check-out": {
       "post": {
         "operationId": "post_api_attendance_check_out",
-        "summary": "퇴근 (RPC)",
+        "summary": "퇴근 (백엔드가 check_out 기록)",
         "tags": [
           "근태"
         ],
-        "description": "퇴근 RPC/서버 함수 호출. 당일 attendance_records 행의 check_out을 서버 시각으로 UPDATE. 직원 직접 테이블 UPDATE가 아닌 RPC 경로.",
+        "description": "백엔드 RPC. 당일 attendance_records.check_out을 서버 시각으로 UPDATE.",
         "responses": {
           "200": {
             "description": "성공",
@@ -2099,18 +2096,9 @@
                     "value": {
                       "data": {
                         "company_settings": {
-                          "id": "11111111-1111-4111-8111-111111111111",
-                          "timezone": "Asia/Seoul",
-                          "workdays": [
-                            1,
-                            2,
-                            3,
-                            4,
-                            5
-                          ],
+                          "id": true,
                           "work_start_time": "09:00:00",
                           "work_end_time": "18:00:00",
-                          "afternoon_start_time": "13:00:00",
                           "late_threshold": 0,
                           "auto_approval_enabled": true,
                           "updated_at": "2026-11-10T00:00:00Z"
@@ -2119,7 +2107,6 @@
                           {
                             "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                             "name": "오전 반차",
-                            "code": "am_half",
                             "deduction_days": 0.5,
                             "is_active": true
                           }
@@ -2265,13 +2252,12 @@
                             "created_at": "2026-11-10T00:00:00Z",
                             "updated_at": "2026-11-10T00:00:00Z"
                           },
-                          "profile": {
+                          "employee": {
                             "id": "11111111-1111-4111-8111-111111111111",
                             "full_name": "김직원",
                             "email": "employee@example.com",
                             "role": "employee",
-                            "department": "개발팀",
-                            "is_active": true
+                            "department": "개발팀"
                           }
                         }
                       ],
@@ -2489,14 +2475,6 @@
                           "created_at": "2026-11-10T00:00:00Z",
                           "updated_at": "2026-11-10T00:00:00Z"
                         },
-                        "profile": {
-                          "id": "11111111-1111-4111-8111-111111111111",
-                          "full_name": "김직원",
-                          "email": "employee@example.com",
-                          "role": "employee",
-                          "department": "개발팀",
-                          "is_active": true
-                        },
                         "balance": {
                           "year": 2026,
                           "total_days": 15,
@@ -2505,7 +2483,14 @@
                           "pending_days": 1,
                           "available_days": 9
                         },
-                        "attendance_conflicts": []
+                        "attendance_conflicts": [],
+                        "employee": {
+                          "id": "11111111-1111-4111-8111-111111111111",
+                          "full_name": "김직원",
+                          "email": "employee@example.com",
+                          "role": "employee",
+                          "department": "개발팀"
+                        }
                       }
                     }
                   }
@@ -3078,14 +3063,6 @@
                     "value": {
                       "data": [
                         {
-                          "profile": {
-                            "id": "11111111-1111-4111-8111-111111111111",
-                            "full_name": "김직원",
-                            "email": "employee@example.com",
-                            "role": "employee",
-                            "department": "개발팀",
-                            "is_active": true
-                          },
                           "balance": {
                             "year": 2026,
                             "total_days": 15,
@@ -3093,6 +3070,13 @@
                             "remaining_days": 10,
                             "pending_days": 1,
                             "available_days": 9
+                          },
+                          "employee": {
+                            "id": "11111111-1111-4111-8111-111111111111",
+                            "full_name": "김직원",
+                            "email": "employee@example.com",
+                            "role": "employee",
+                            "department": "개발팀"
                           }
                         }
                       ],
@@ -3483,18 +3467,9 @@
                     "value": {
                       "data": {
                         "company_settings": {
-                          "id": "11111111-1111-4111-8111-111111111111",
-                          "timezone": "Asia/Seoul",
-                          "workdays": [
-                            1,
-                            2,
-                            3,
-                            4,
-                            5
-                          ],
+                          "id": true,
                           "work_start_time": "09:00:00",
                           "work_end_time": "18:00:00",
-                          "afternoon_start_time": "13:00:00",
                           "late_threshold": 0,
                           "auto_approval_enabled": true,
                           "updated_at": "2026-11-10T00:00:00Z"
@@ -3503,12 +3478,10 @@
                           {
                             "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                             "name": "오전 반차",
-                            "code": "am_half",
                             "deduction_days": 0.5,
                             "is_active": true
                           }
                         ],
-                        "version": 1,
                         "approval_rules": [
                           {
                             "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
@@ -3631,18 +3604,9 @@
                     "value": {
                       "data": {
                         "company_settings": {
-                          "id": "11111111-1111-4111-8111-111111111111",
-                          "timezone": "Asia/Seoul",
-                          "workdays": [
-                            1,
-                            2,
-                            3,
-                            4,
-                            5
-                          ],
+                          "id": true,
                           "work_start_time": "09:00:00",
                           "work_end_time": "18:00:00",
-                          "afternoon_start_time": "13:00:00",
                           "late_threshold": 0,
                           "auto_approval_enabled": false,
                           "updated_at": "2026-11-10T00:00:00Z"
@@ -3651,12 +3615,10 @@
                           {
                             "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                             "name": "오전 반차",
-                            "code": "am_half",
                             "deduction_days": 0.5,
                             "is_active": true
                           }
                         ],
-                        "version": 2,
                         "approval_rules": [
                           {
                             "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
@@ -3789,7 +3751,6 @@
               "examples": {
                 "request": {
                   "value": {
-                    "expected_version": 1,
                     "company_settings": {
                       "auto_approval_enabled": false
                     },
@@ -3822,6 +3783,7 @@
       "Balance": {
         "type": "object",
         "additionalProperties": false,
+        "description": "leave_balances + 백엔드 계산 필드. total_days/used_days는 DB, 나머지는 서버 계산.",
         "properties": {
           "year": {
             "type": "integer",
@@ -3829,38 +3791,28 @@
           },
           "total_days": {
             "type": "number",
-            "format": "double",
             "minimum": 0,
-            "multipleOf": 0.5,
-            "description": "leave_balances.total_days (올해 부여 총량). leave_requests.total_days와 다름."
+            "description": "leave_balances.total_days (부여 총량)"
           },
           "used_days": {
             "type": "number",
-            "format": "double",
             "minimum": 0,
-            "multipleOf": 0.5,
             "description": "leave_balances.used_days"
           },
           "remaining_days": {
             "type": "number",
-            "format": "double",
             "minimum": 0,
-            "multipleOf": 0.5,
-            "description": "total_days - used_days"
+            "description": "백엔드 계산: total_days - used_days"
           },
           "pending_days": {
             "type": "number",
-            "format": "double",
             "minimum": 0,
-            "multipleOf": 0.5,
-            "description": "해당 연도 status=pending 인 leave_requests.total_days 합계"
+            "description": "백엔드 계산: 해당 연도 pending leave_requests.total_days 합"
           },
           "available_days": {
             "type": "number",
-            "format": "double",
             "minimum": 0,
-            "multipleOf": 0.5,
-            "description": "remaining_days - pending_days"
+            "description": "백엔드 계산: remaining_days - pending_days"
           }
         },
         "required": [
@@ -4389,7 +4341,7 @@
       "Attendance": {
         "type": "object",
         "additionalProperties": false,
-        "description": "public.attendance_records. check_in/check_out/work_date는 RPC가 서버 시각으로 기록. status는 present|late.",
+        "description": "public.attendance_records. work_date·check_in·check_out·status는 백엔드 RPC가 서버 기준으로 기록/판정.",
         "properties": {
           "id": {
             "type": "string",
@@ -4401,17 +4353,20 @@
           },
           "work_date": {
             "type": "string",
-            "format": "date"
+            "format": "date",
+            "description": "백엔드가 서버 날짜로 설정"
           },
           "check_in": {
             "type": "string",
             "format": "date-time",
-            "nullable": true
+            "nullable": true,
+            "description": "백엔드가 서버 시각으로 설정"
           },
           "check_out": {
             "type": "string",
             "format": "date-time",
-            "nullable": true
+            "nullable": true,
+            "description": "백엔드가 서버 시각으로 설정"
           },
           "status": {
             "type": "string",
@@ -4419,22 +4374,20 @@
               "present",
               "late"
             ],
-            "nullable": true
+            "nullable": true,
+            "description": "company_settings 기준 백엔드 판정"
           }
         },
         "required": [
           "id",
           "employee_id",
-          "work_date",
-          "check_in",
-          "check_out",
-          "status"
+          "work_date"
         ]
       },
       "LeaveRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "public.leave_requests. total_days는 해당 신청 차감(예약) 일수.",
+        "description": "public.leave_requests. leave_type_name은 leave_types.name 조인(백엔드).",
         "properties": {
           "id": {
             "type": "string",
@@ -4450,7 +4403,7 @@
           },
           "leave_type_name": {
             "type": "string",
-            "description": "API 조인 필드 (leave_types.name)"
+            "description": "leave_types.name 조인"
           },
           "start_date": {
             "type": "string",
@@ -4462,9 +4415,8 @@
           },
           "total_days": {
             "type": "number",
-            "format": "double",
             "exclusiveMinimum": 0,
-            "description": "leave_requests.total_days (신청 일수, 잔액 total_days와 다름)"
+            "description": "leave_requests.total_days (신청 일수)"
           },
           "reason": {
             "type": "string",
@@ -4495,7 +4447,7 @@
             "type": "string",
             "format": "uuid",
             "nullable": true,
-            "description": "승인자 employees.id. 수동 승인/반려 시 처리한 hr_admin."
+            "description": "처리한 hr_admin employees.id"
           },
           "reviewed_at": {
             "type": "string",
@@ -4511,16 +4463,10 @@
           "id",
           "employee_id",
           "leave_type_id",
-          "leave_type_name",
           "start_date",
           "end_date",
           "total_days",
-          "reason",
           "status",
-          "approval_type",
-          "decision_reason",
-          "reviewed_by",
-          "reviewed_at",
           "created_at"
         ]
       },
@@ -4556,44 +4502,28 @@
       "Settings": {
         "type": "object",
         "additionalProperties": false,
-        "description": "public.company_settings 싱글톤. PK id=true. workdays는 API/프론트 확장 필드(DB 컬럼 추가 시 반영).",
+        "description": "public.company_settings 싱글톤",
         "properties": {
           "id": {
             "type": "boolean",
             "enum": [
               true
-            ],
-            "description": "싱글톤 키. 항상 true"
+            ]
           },
           "work_start_time": {
             "type": "string",
-            "pattern": "^\\d{2}:\\d{2}:\\d{2}$",
-            "description": "default 09:00:00"
+            "pattern": "^\\d{2}:\\d{2}:\\d{2}$"
           },
           "work_end_time": {
             "type": "string",
-            "pattern": "^\\d{2}:\\d{2}:\\d{2}$",
-            "description": "default 18:00:00"
+            "pattern": "^\\d{2}:\\d{2}:\\d{2}$"
           },
           "late_threshold": {
             "type": "integer",
-            "minimum": 0,
-            "description": "지각 유예(분)"
+            "minimum": 0
           },
           "auto_approval_enabled": {
             "type": "boolean"
-          },
-          "workdays": {
-            "type": "array",
-            "description": "API/프론트 확장(1=월…7=일).",
-            "uniqueItems": true,
-            "minItems": 1,
-            "maxItems": 7,
-            "items": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 7
-            }
           },
           "updated_at": {
             "type": "string",
@@ -4605,7 +4535,8 @@
           "work_start_time",
           "work_end_time",
           "late_threshold",
-          "auto_approval_enabled"
+          "auto_approval_enabled",
+          "updated_at"
         ]
       },
       "ApprovalRule": {
@@ -4624,13 +4555,11 @@
           "max_consecutive_days": {
             "type": "integer",
             "minimum": 1,
-            "nullable": true,
-            "description": "null 허용(DB). 초과 시 HR 검토 예상."
+            "nullable": true
           },
           "min_notice_days": {
             "type": "integer",
-            "minimum": 0,
-            "description": "미달 시 HR 검토 예상."
+            "minimum": 0
           },
           "is_active": {
             "type": "boolean"
@@ -4647,14 +4576,14 @@
         "required": [
           "id",
           "rule_name",
-          "max_consecutive_days",
-          "min_notice_days"
+          "min_notice_days",
+          "is_active"
         ]
       },
       "LeaveType": {
         "type": "object",
         "additionalProperties": false,
-        "description": "public.leave_types. code는 챗봇 leave_type_code 매핑(DB code 컬럼 없으면 서버에서 이름/매핑으로 연결).",
+        "description": "public.leave_types (code 컬럼 없음)",
         "properties": {
           "id": {
             "type": "string",
@@ -4664,19 +4593,9 @@
             "type": "string",
             "maxLength": 50
           },
-          "code": {
-            "type": "string",
-            "enum": [
-              "annual",
-              "am_half",
-              "pm_half"
-            ],
-            "description": "챗봇 leave_type_code 매핑"
-          },
           "deduction_days": {
             "type": "number",
-            "exclusiveMinimum": 0,
-            "description": "leave_types.deduction_days"
+            "exclusiveMinimum": 0
           },
           "is_active": {
             "type": "boolean"
@@ -4689,7 +4608,8 @@
         "required": [
           "id",
           "name",
-          "deduction_days"
+          "deduction_days",
+          "is_active"
         ]
       },
       "SettingsBundle": {
@@ -4728,11 +4648,11 @@
             "properties": {
               "work_start_time": {
                 "type": "string",
-                "pattern": "^d{2}:d{2}:d{2}$"
+                "pattern": "^\\d{2}:\\d{2}:\\d{2}$"
               },
               "work_end_time": {
                 "type": "string",
-                "pattern": "^d{2}:d{2}:d{2}$"
+                "pattern": "^\\d{2}:\\d{2}:\\d{2}$"
               },
               "late_threshold": {
                 "type": "integer",
@@ -4740,17 +4660,6 @@
               },
               "auto_approval_enabled": {
                 "type": "boolean"
-              },
-              "workdays": {
-                "type": "array",
-                "uniqueItems": true,
-                "minItems": 1,
-                "maxItems": 7,
-                "items": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 7
-                }
               }
             }
           },
@@ -4793,62 +4702,8 @@
                 "description": "",
                 "format": "date"
               },
-              "timezone": {
-                "type": "string",
-                "description": ""
-              },
-              "profile": {
-                "$ref": "#/components/schemas/Employee"
-              },
               "attendance": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "description": "",
-                    "format": "uuid"
-                  },
-                  "employee_id": {
-                    "type": "string",
-                    "description": "",
-                    "format": "uuid"
-                  },
-                  "work_date": {
-                    "type": "string",
-                    "description": "",
-                    "format": "date"
-                  },
-                  "check_in": {
-                    "type": "string",
-                    "description": "",
-                    "format": "date-time",
-                    "nullable": true
-                  },
-                  "check_out": {
-                    "type": "string",
-                    "description": "",
-                    "format": "date-time",
-                    "nullable": true
-                  },
-                  "status": {
-                    "type": "string",
-                    "description": "",
-                    "enum": [
-                      "present",
-                      "late"
-                    ]
-                  }
-                },
-                "required": [
-                  "id",
-                  "employee_id",
-                  "work_date",
-                  "check_in",
-                  "check_out",
-                  "status"
-                ],
-                "description": "status는 DB 출근 판정. work_state는 check_in/check_out으로 계산한 API 응답 필드. 기록이 없으면 전체 attendance=null.",
+                "$ref": "#/components/schemas/Attendance",
                 "nullable": true
               },
               "leave_balance": {
@@ -4859,12 +4714,14 @@
                 "items": {
                   "$ref": "#/components/schemas/LeaveRequest"
                 }
+              },
+              "employee": {
+                "$ref": "#/components/schemas/Employee"
               }
             },
             "required": [
               "today",
-              "timezone",
-              "profile",
+              "employee",
               "attendance",
               "leave_balance",
               "recent_requests"
@@ -4974,7 +4831,7 @@
                         "check_out",
                         "status"
                       ],
-                      "description": "status는 DB 출근 판정. work_state는 check_in/check_out으로 계산한 API 응답 필드. 기록이 없으면 전체 attendance=null.",
+                      "description": "public.attendance_records. 기록이 없으면 attendance=null.",
                       "nullable": true
                     },
                     "approved_leaves": {
@@ -5124,13 +4981,13 @@
                 "request": {
                   "$ref": "#/components/schemas/LeaveRequest"
                 },
-                "profile": {
+                "employee": {
                   "$ref": "#/components/schemas/Employee"
                 }
               },
               "required": [
                 "request",
-                "profile"
+                "employee"
               ]
             }
           },
@@ -5154,7 +5011,7 @@
               "request": {
                 "$ref": "#/components/schemas/LeaveRequest"
               },
-              "profile": {
+              "employee": {
                 "$ref": "#/components/schemas/Employee"
               },
               "balance": {
@@ -5169,7 +5026,7 @@
             },
             "required": [
               "request",
-              "profile",
+              "employee",
               "balance",
               "attendance_conflicts"
             ]
@@ -5228,66 +5085,16 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "profile": {
+                "employee": {
                   "$ref": "#/components/schemas/Employee"
                 },
                 "balance": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "properties": {
-                    "year": {
-                      "type": "integer",
-                      "minimum": 2000
-                    },
-                    "total_days": {
-                      "type": "number",
-                      "format": "double",
-                      "minimum": 0,
-                      "multipleOf": 0.5,
-                      "description": "leave_balances.total_days"
-                    },
-                    "used_days": {
-                      "type": "number",
-                      "format": "double",
-                      "minimum": 0,
-                      "multipleOf": 0.5,
-                      "description": "leave_balances.used_days"
-                    },
-                    "remaining_days": {
-                      "type": "number",
-                      "format": "double",
-                      "minimum": 0,
-                      "multipleOf": 0.5,
-                      "description": "total_days - used_days"
-                    },
-                    "pending_days": {
-                      "type": "number",
-                      "format": "double",
-                      "minimum": 0,
-                      "multipleOf": 0.5,
-                      "description": "동일 잔액 연도의 pending 신청 예약 일수 합계"
-                    },
-                    "available_days": {
-                      "type": "number",
-                      "format": "double",
-                      "minimum": 0,
-                      "multipleOf": 0.5,
-                      "description": "remaining_days - pending_days"
-                    }
-                  },
-                  "required": [
-                    "year",
-                    "total_days",
-                    "used_days",
-                    "remaining_days",
-                    "pending_days",
-                    "available_days"
-                  ],
+                  "$ref": "#/components/schemas/Balance",
                   "nullable": true
                 }
               },
               "required": [
-                "profile",
+                "employee",
                 "balance"
               ]
             }
@@ -5413,11 +5220,12 @@
       "Employee": {
         "type": "object",
         "additionalProperties": false,
-        "description": "public.employees. id는 auth.users.id와 동일.",
+        "description": "public.employees",
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "auth.users.id FK"
           },
           "full_name": {
             "type": "string",
@@ -5437,8 +5245,8 @@
           },
           "department": {
             "type": "string",
-            "nullable": true,
-            "maxLength": 100
+            "maxLength": 100,
+            "nullable": true
           },
           "created_at": {
             "type": "string",
@@ -5450,7 +5258,48 @@
           "full_name",
           "email",
           "role",
-          "department",
+          "created_at"
+        ]
+      },
+      "LeaveBalanceTransaction": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "public.leave_balance_transactions",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "leave_balance_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "leave_request_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "transaction_type": {
+            "type": "string",
+            "enum": [
+              "grant",
+              "deduction",
+              "restoration"
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "leave_balance_id",
+          "transaction_type",
+          "amount",
           "created_at"
         ]
       }
